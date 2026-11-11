@@ -3,7 +3,8 @@
     python train.py 2      # quick test on 2 training files (1 million positions)
     python train.py        # full run on all training files
 
-Saves the best model to models/policy.keras.
+Saves the best model to models/policy.keras. If the wandb package is installed,
+the run is also logged live to Weights & Biases.
 """
 import glob, os, sys
 
@@ -59,8 +60,29 @@ model.compile(
     metrics=["accuracy"],
 )
 os.makedirs("models", exist_ok=True)
+callbacks = [keras.callbacks.ModelCheckpoint("models/policy.keras", monitor="val_accuracy", save_best_only=True)]
+try:                                   # live dashboard on Weights & Biases, used only if wandb is installed
+    import wandb
+except ImportError:
+    wandb = None
+if wandb:
+    class WandbLogger(keras.callbacks.Callback):
+        batches = 0                    # batches trained so far, across all epochs
+
+        def on_train_batch_end(self, batch, logs=None):
+            self.batches += 1
+            if batch % 100 == 0:
+                wandb.log({"batch": self.batches, **{"train/" + k: float(v) for k, v in logs.items()}})
+
+        def on_epoch_end(self, epoch, logs=None):
+            wandb.log({"epoch": epoch + 1, **{"epoch/" + k: float(v) for k, v in logs.items()}})
+
+    wandb.init(project="chess-player", config={"batch": BATCH, "epochs": EPOCHS, "train_files": len(train_files)})
+    wandb.define_metric("train/*", step_metric="batch")    # x-axis: number of batches
+    wandb.define_metric("epoch/*", step_metric="epoch")    # x-axis: epoch number
+    callbacks.append(WandbLogger())
 model.fit(
     stream(train_files, True), steps_per_epoch=steps(train_files), epochs=EPOCHS,
     validation_data=stream(val_files, False), validation_steps=steps(val_files),
-    callbacks=[keras.callbacks.ModelCheckpoint("models/policy.keras", monitor="val_accuracy", save_best_only=True)],
+    callbacks=callbacks,
 )
