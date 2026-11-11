@@ -1,3 +1,5 @@
 chess>=1.10
 zstandard>=0.22
 numpy>=1.24
+torch>=2.6
+keras>=3.6
