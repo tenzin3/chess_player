@@ -1,4 +1,5 @@
-/data
+/data/*
+!/data/sample/
 *.DS_Store
 .venv/
 /models

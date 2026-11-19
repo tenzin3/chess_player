@@ -121,3 +121,10 @@ Done in 2568s
 ```
 
 </details>
+
+
+## Sample data
+
+`data/sample/sample.csv` shows what one row of the training data looks like:
+the first 20 moves of one game, with each column explained in
+`data/sample/README.md`. It is the only part of `data/` kept in git.
