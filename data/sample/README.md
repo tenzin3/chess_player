@@ -146,6 +146,126 @@ is `c2c4` and `move_label` is 10 x 64 + 26 = 666. The `real_move` column
 shows the original `c7c5` for comparison. The `en_passant` value `e6` is the
 square White's pawn skipped over (e3), flipped.
 
+### Why `castling`, `en_passant` and `promotion` are needed
+
+The `board` column shows where every piece stands, but that is not the whole
+position. Castling and en passant are rules that depend on **what happened
+earlier in the game**, which the board cannot show. Promotion fills a gap in
+how moves are numbered. The three examples below are real rows from the
+validation set (rows 423786, 331 and 71 of `val_0000.npz`), shown the same way
+as `sample.csv`.
+
+#### `castling`: can the king still castle?
+
+Castling moves the king two squares towards a rook and jumps the rook over it.
+It is only allowed if **that king and that rook have never moved** in the game.
+If a rook moves away and comes back, the board looks untouched but castling
+on that side is gone for good.
+
+```
+board      r...k..r/pp...pbp/.np...p./....p.../..B...../..PP..P./P...PP.P/R...K.NR
+castling   Kkq
+
+8  r . . . k . . r
+7  p p . . . p b p
+6  . n p . . . p .
+5  . . . . p . . .
+4  . . B . . . . .
+3  . . P P . . P .
+2  P . . . P P . P
+1  R . . . K . N R      king on e1, rooks on a1 and h1
+   a b c d e f g h
+```
+
+The king and both rooks are on their starting squares, so from the board alone
+you would think both kinds of castling are allowed. But `castling` is `Kkq`:
+there is no `Q`, so the side to move can **no longer castle queenside**. The
+a1 rook must have moved earlier and come back. Without this column the model
+would see two identical boards, one where castling queenside is legal and one
+where it is not, and could not tell them apart.
+
+In the validation set, the side to move castles kingside 9,888 times.
+
+#### `en_passant`: did a pawn just move two squares?
+
+Pawns normally capture one square diagonally forward. En passant ("in
+passing") is a special capture: if an enemy pawn moves **two squares** forward
+and lands right beside one of your pawns, your pawn may capture it **as if it
+had moved only one square**, by moving diagonally onto the square it skipped.
+This is allowed **only on the very next move**; after that the chance is gone.
+The rule exists so a pawn cannot use its two-square first move to slip past an
+enemy pawn.
+
+```
+board        rnbqk..r/ppb..ppp/..p..n../..Pp..../...Pp.../.N..P.../PP...PPP/RNBQKB.R
+en_passant   d6
+move         c5d6
+
+8  r n b q k . . r
+7  p p b . . p p p
+6  . . p . . n . .      d6 = the square the black pawn skipped over
+5  . . P p . . . .      white pawn c5, black pawn that just arrived on d5
+4  . . . P p . . .
+3  . N . . P . . .
+2  P P . . . P P P
+1  R N B Q K B . R
+   a b c d e f g h
+```
+
+The opponent's pawn has just moved from d7 to d5, skipping d6, so
+`en_passant` is `d6`. The side to move's pawn on c5 captures it en passant by
+moving to d6 (`move` = `c5d6`), and the pawn on d5 is removed. If that black
+pawn had arrived on d5 earlier in the game, the board would look exactly the
+same, but `c5d6` would not be allowed. The `en_passant` column is the only
+way the model can tell the difference.
+
+The column is filled in after **every** two-square pawn move, even when no
+enemy pawn stands ready to capture, so it is set far more often than en
+passant is actually played. In the validation set, en passant is played 269
+times.
+
+#### `promotion`: which piece did the pawn become?
+
+A pawn that reaches the far end of the board is promoted: it turns into a
+queen, rook, bishop or knight, chosen by the player. Moves are labelled only
+by their start and end squares (`move_label` = from x 64 + to), so all four
+choices get **the same label**. The `promotion` column records which one was
+chosen, so that information is not lost.
+
+```
+board       ......../..QP.ppk/p......./.p....q./..p...../P....rP./.P...P../.....RK.
+move        d7d8
+promotion   q
+move_label  3323
+
+8  . . . . . . . .      d8 = where the pawn promotes
+7  . . Q P . p p k      the side to move's pawn on d7
+6  p . . . . . . .
+5  . p . . . . q .
+4  . . p . . . . .
+3  P . . . . r P .
+2  . P . . . P . .
+1  . . . . . R K .
+   a b c d e f g h
+```
+
+The pawn moves from d7 to d8 and becomes a queen. The label is 51 x 64 + 59 =
+3323, and it would be 3323 for a rook, bishop or knight too; only `promotion`
+says it was a queen.
+
+In the validation set there are 1,169 promotions: 1,135 to a queen, 13 to a
+rook, 11 to a bishop and 10 to a knight. Because a queen is chosen 97% of the
+time, the first model ignores this column and always promotes to a queen. It
+is kept so a later model can learn the rare cases.
+
+#### Summary
+
+| Column | What it tells the model that the board cannot | How often it matters |
+|---|---|---|
+| `castling` | Whether the king and rooks have moved earlier | Every game, mostly in the opening |
+| `en_passant` | Whether a pawn moved two squares on the last move | Rarely (269 times in 603,818 rows) |
+| `promotion` | Which piece a pawn became, since the label cannot say | Rarely (1,169 times), and almost always a queen |
+
 ### How the real training files store the same row
 
 | `sample.csv` column | Stored in the `.npz` files as |
