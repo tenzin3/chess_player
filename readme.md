@@ -125,6 +125,11 @@ Done in 2568s
 
 ## Sample data
 
-`data/sample/sample.csv` shows what one row of the training data looks like:
-the first 20 moves of one game, with each column explained in
-`data/sample/README.md`. It is the only part of `data/` kept in git.
+`data/sample/` holds a small sample of the data at both stages, using the
+same game, and is the only part of `data/` kept in git:
+
+- `raw_sample.pgn`: one game as it appears in the raw Lichess download
+- `sample.csv`: the first 20 moves of that game after `prepare.py`, one row
+  per move, in readable form
+- `README.md`: the data description: raw vs prepared, every column, and how to
+  read the board
